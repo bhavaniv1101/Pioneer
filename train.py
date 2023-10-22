@@ -35,7 +35,7 @@ from docopt import docopt
 import neurvps
 import neurvps.models.vanishing_net as vn
 from neurvps.config import C, M
-from neurvps.datasets import Tmm17Dataset, ScanNetDataset, WireframeDataset
+from neurvps.datasets import Tmm17Dataset, ScanNetDataset, WireframeDataset, TrialDataset
 
 
 def git_hash():
@@ -49,14 +49,16 @@ def git_hash():
 def get_outdir(identifier):
     # load config
     name = str(datetime.datetime.now().strftime("%y%m%d-%H%M%S"))
-    name += "-%s" % git_hash()
+    # NOTE: Commented out to avoid subprocess.CalledProcessError
+    # name += "-%s" % git_hash()
     name += "-%s" % identifier
     outdir = osp.join(osp.expanduser(C.io.logdir), name)
     if not osp.exists(outdir):
         os.makedirs(outdir)
     C.io.resume_from = outdir
     C.to_yaml(osp.join(outdir, "config.yaml"))
-    os.system(f"git diff HEAD > {outdir}/gitdiff.patch")
+    # NOTE: Commenting out because this isn't really needed (?)
+    # os.system(f"git diff HEAD > {outdir}/gitdiff.patch")
     return outdir
 
 
@@ -73,7 +75,7 @@ def main():
     np.random.seed(0)
     torch.manual_seed(0)
 
-    device_name = "cpu"
+    device_name = "gpu"
     num_gpus = args["--devices"].count(",") + 1
     os.environ["CUDA_VISIBLE_DEVICES"] = args["--devices"]
     if torch.cuda.is_available():
@@ -94,7 +96,10 @@ def main():
         "num_workers": C.io.num_workers if os.name != "nt" else 0,
         "pin_memory": True,
     }
-    if C.io.dataset.upper() == "WIREFRAME":
+
+    if C.io.dataset.upper() == "TRIAL":
+        Dataset = TrialDataset
+    elif C.io.dataset.upper() == "WIREFRAME":
         Dataset = WireframeDataset
     elif C.io.dataset.upper() == "TMM17":
         Dataset = Tmm17Dataset
@@ -104,10 +109,10 @@ def main():
         raise NotImplementedError
 
     train_loader = torch.utils.data.DataLoader(
-        Dataset(datadir, split="train"), shuffle=True, **kwargs
+        Dataset(datadir, split="train", num_validation=400), shuffle=False, **kwargs
     )
     val_loader = torch.utils.data.DataLoader(
-        Dataset(datadir, split="valid"), shuffle=False, **kwargs
+        Dataset(datadir, split="valid", num_validation=400), shuffle=False, **kwargs
     )
     epoch_size = len(train_loader)
 
@@ -152,7 +157,9 @@ def main():
 
     if resume_from:
         optim.load_state_dict(checkpoint["optim_state_dict"])
+    # NOTE: The line below is what creates output in logs folder
     outdir = resume_from or get_outdir(args["--identifier"])
+    # outdir = "/content/output"
     print("outdir:", outdir)
 
     try:
