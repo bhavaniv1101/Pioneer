@@ -38,23 +38,28 @@ class VanishingNet(nn.Module):
             vpts = torch.tensor(vpts, device=x.device)
             return self.anet(x, vpts).sigmoid()
 
-        vpts_gt = input_dict["vpts"].cpu().numpy()
+        vpts_gt = input_dict["vpts"].cpu().numpy()  # shape (8, 1, 3)
         vpts, y = [], []
-        for n in range(N):
+        for n in range(N):  # N = 8 (batch size)
 
             def add_sample(p):
+                # print(f"p = {p}, vpts_gt[n] = {vpts_gt[n]}")
+                # print(f"to_pixel(p) = {to_pixel(p)}")
+                # print(f"to_label(p, vpts_gt[n]) = {to_label(p, vpts_gt[n])}")
                 vpts.append(to_pixel(p))
                 y.append(to_label(p, vpts_gt[n]))
 
-            for vgt in vpts_gt[n]:
+            for vgt in vpts_gt[n]:  # vgt.shape = (3,) -- ground truth for v-point
+                # M.multires has 4 "magic numbers" -- change these?
+                # `st` and `ed` are start and end of an angular range
                 for st, ed in zip([0] + M.multires[:-1], M.multires):
-                    # positive samples
+                    # positive samples (M.smp_pos = 1)
                     for _ in range(M.smp_pos):
                         add_sample(sample_sphere(vgt, st, ed))
-                    # negative samples
+                    # negative samples (M.smp_neg = 1, M.smp_multiplier = 2)
                     for _ in range(M.smp_neg):
                         add_sample(sample_sphere(vgt, ed, ed * M.smp_multiplier))
-            # random samples
+            # random samples (M.smp_rnd = 3)
             for _ in range(M.smp_rnd):
                 add_sample(sample_sphere(np.array([0, 0, 1]), 0, math.pi / 2))
 
@@ -62,9 +67,10 @@ class VanishingNet(nn.Module):
         vpts = torch.tensor(vpts, device=x.device)
 
         x = self.anet(x, vpts)
-        L = self.loss(x, y)
+        L = self.loss(x, y)  # x and y are both torch.Size([88, 4])
         maskn = (y == 0).float()
         maskp = (y == 1).float()
+        # print(f"In vanishing_net.py: y.min = {y.min()}, y.mean = {y.mean()}, y.max = {y.max()}")
         losses = {}
         for i in range(len(M.multires)):
             assert maskn[:, i].sum().item() != 0
