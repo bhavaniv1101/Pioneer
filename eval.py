@@ -42,7 +42,7 @@ from docopt import docopt
 import neurvps
 import neurvps.models.vanishing_net as vn
 from neurvps.config import C, M
-from neurvps.datasets import Tmm17Dataset, ScanNetDataset, WireframeDataset
+from neurvps.datasets import Tmm17Dataset, ScanNetDataset, WireframeDataset, TrialDataset
 
 
 def AA(x, y, threshold):
@@ -93,7 +93,9 @@ def main():
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
 
-    if C.io.dataset.upper() == "WIREFRAME":
+    if C.io.dataset.upper() == "TRIAL":
+        Dataset = TrialDataset
+    elif C.io.dataset.upper() == "WIREFRAME":
         Dataset = WireframeDataset
     elif C.io.dataset.upper() == "TMM17":
         Dataset = Tmm17Dataset
