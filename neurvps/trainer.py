@@ -163,6 +163,7 @@ class Trainer(object):
         self.model.train()
         time = timer()
         for batch_idx, (image, target) in enumerate(self.train_loader):
+            # print(f"In trainer.py: batch_idx = {batch_idx}")
             self.optim.zero_grad()
             self.metrics[...] = 0
 
@@ -181,13 +182,13 @@ class Trainer(object):
             else:
                 self.avg_metrics = self.avg_metrics * 0.9 + self.metrics * 0.1
             self.iteration += 1
-            self._write_metrics(1, loss.item(), "training", do_print=False)
+            self._write_metrics(1, loss.item(), "training", do_print=True)
 
             if self.iteration % 4 == 0:
                 tprint(
                     f"{self.epoch:03}/{self.iteration * self.batch_size // 1000:04}k| "
                     + "| ".join(map("{:.5f}".format, self.avg_metrics[0]))
-                    + f"| {4 * self.batch_size / (timer() - time):04.1f} "
+                    + f"| {4 * self.batch_size / (timer() - time):04.1f} \n"
                 )
                 time = timer()
             num_images = self.batch_size * self.iteration
@@ -214,6 +215,7 @@ class Trainer(object):
                     + "| ".join(map("{:.5f}".format, metrics / size))
                 )
                 with open(f"{self.out}/loss.csv", "a") as fout:
+                    print("Writing losses")
                     print(csv_str, file=fout)
                 pprint(prt_str, " " * 7)
         self.writer.add_scalar(
