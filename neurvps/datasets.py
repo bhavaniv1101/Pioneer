@@ -11,10 +11,74 @@ import skimage.io
 import numpy.linalg as LA
 import matplotlib.pyplot as plt
 import skimage.transform
+from PIL import Image, ImageDraw
 from torch.utils.data import Dataset
 from torch.utils.data.dataloader import default_collate
 
 from neurvps.config import C
+
+
+class TrialDataset(Dataset):
+    """Class representing `trial` dataset."""
+
+    def __init__(self, rootdir, split, num_validation=400):
+        self.rootdir = rootdir
+        self.split = split
+        # FIXME: Check directory (`rootdir` is set to `data/trial` in `config.yaml`)
+        filelist = sorted(glob(f"{rootdir}/image_*.jpg"))
+        if split == "train":
+            self.filelist = filelist[num_validation :]
+            # FIXME: What should `augmentation_level` be (currently set to 2 in `config.yaml`)?
+            self.size = len(self.filelist) * C.io.augmentation_level
+        elif split == "valid":
+            self.filelist = filelist[: num_validation]
+            self.size = len(self.filelist)
+        print(f"n{split}:", self.size)
+
+    def __len__(self):
+        return self.size
+
+    # def __getitem__(self, idx):
+    #     # Read in specified image as a NumPy array of shape `(R, C, 3)`
+    #     image_name = self.filelist[idx % len(self.filelist)]
+    #     image = skimage.io.imread(image_name).astype(float)[:, :, : 3]
+    #     # Put last axis (with RGB values) in first position (new shape: `(3, R, C)`)
+    #     image = np.rollaxis(image, 2).copy()
+    #     # Read in vanishing point mask for this image (assuming that image directory itself
+    #     # contains masks for all images, i.e., no separate `vanishing_point_masks` directory)
+    #     vpoint_mask_name = image_name.replace("image", "mask")
+    #     vpoint_mask = skimage.io.imread(f"{vpoint_mask_name}").astype(float)[:, :, : 3]
+    #     # R = len(vpoint_mask[0])
+    #     # C = len(vpoint_mask[0][0])
+    #     skimage.io.imsave(f"{self.rootdir}skimage_{vpoint_mask_name}.jpg", )
+    #     with np.load(f"{vpoint_mask_name}") as npz:
+    #         vpts = npz["vpts"]
+    #     return torch.tensor(image).float(), {"vpts": torch.tensor(vpts).float()}
+
+    def __getitem__(self, idx):
+        # Read in specified image as a NumPy array of shape `(R, C, 3)`
+        image_name = self.filelist[idx % len(self.filelist)]
+        image = skimage.io.imread(image_name).astype(float)[:, :, : 3]
+        n_rows_orig, n_cols_orig = image.shape[: 2]
+        # Resize and put last axis (with RGB values) in first position 
+        # (new shape: `(3, 512, 512)`)
+        image = skimage.transform.resize(image, (512, 512))
+        image = np.rollaxis(image, 2).copy()
+        # Read in vanishing point for this image (3 numbers on a line in a text file)
+        vpoint_fname = f"{self.rootdir}/vpoint_{idx}.txt"
+        vpoint = np.loadtxt(vpoint_fname)  # shape is (3,)
+        # Scale vanishing point since image has been resized to 512 x 512
+        # NOTE: By comparison with TMM17 training data, hypothesis is that
+        # vanishing point should be represented as (v_x, v_y, 1), where v_x and
+        # v_y are both in the range [-1, 1] (so image center is the origin) and
+        # x-axis points right and y-axis points up (as usual)
+        vpoint[0] = vpoint[0] * 2 / n_cols_orig  # x-coordinate of v-point
+        vpoint[1] = -vpoint[1] * 2 / n_rows_orig  # y-coordinate of v-point
+        # print(vpoint)
+        vpoint /= np.linalg.norm(vpoint)  # Normalize, as expected by NeurVPS
+        # # Read in vanishing point mask for this image (assuming that image directory itself
+        # # contains masks for all images, i.e., no separate `vanishing_point_masks` directory)
+        return torch.tensor(image).float(), {"vpts": torch.tensor(vpoint[np.newaxis, :]).float()}
 
 
 class WireframeDataset(Dataset):
