@@ -1,0 +1,10 @@
+ipython
+numpy
+pytest
+pillow
+torch
+opencv-python
+scikit-image
+matplotlib
+tqdm
+docopt
